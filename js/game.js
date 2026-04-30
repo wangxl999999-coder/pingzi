@@ -64,10 +64,11 @@ export default class Game {
 
   setupButtons() {
     const buttonWidth = 70;
-    const buttonHeight = 35;
-    const spacing = 15;
-    const startX = (this.canvas.width - (buttonWidth * 4 + spacing * 3)) / 2;
-    const buttonY = this.canvas.height - 80;
+    const buttonHeight = 40;
+    const spacing = 12;
+    const totalWidth = buttonWidth * 4 + spacing * 3;
+    const startX = (this.canvas.width - totalWidth) / 2;
+    const buttonY = this.canvas.height - 70;
     
     this.buttons = [
       {
@@ -128,12 +129,12 @@ export default class Game {
     const bottlesPerRow = 4;
     const bottleWidth = config.bottleWidth;
     const bottleHeight = config.bottleHeight;
-    const spacingX = 20;
-    const spacingY = 30;
+    const spacingX = 15;
+    const spacingY = 25;
     
     const totalWidth = bottlesPerRow * bottleWidth + (bottlesPerRow - 1) * spacingX;
-    const startX = (this.canvas.width - totalWidth) / 2;
-    const startY = 100;
+    const startX = Math.max(20, (this.canvas.width - totalWidth) / 2);
+    const startY = 90;
     
     bottleData.forEach((data, index) => {
       const row = Math.floor(index / bottlesPerRow);
@@ -195,10 +196,9 @@ export default class Game {
       this.selectedBottle.selected = false;
       this.selectedBottle = null;
     } else {
-      const pourResult = this.selectedBottle.canPourTo(bottle);
-      
-      if (pourResult) {
-        this.historyManager.saveState(this.bottles);
+      if (this.selectedBottle.canPourTo(bottle)) {
+        this.saveCurrentState();
+        
         const poured = this.selectedBottle.pourTo(bottle);
         
         if (poured) {
@@ -211,6 +211,23 @@ export default class Game {
       this.selectedBottle.selected = false;
       this.selectedBottle = null;
     }
+  }
+
+  saveCurrentState() {
+    const state = {
+      bottles: this.bottles.map(b => ({
+        id: b.id,
+        x: b.x,
+        y: b.y,
+        liquids: [...b.liquids],
+        selected: false,
+        disappearing: false,
+        opacity: 1,
+        scale: 1
+      })),
+      moves: this.moves
+    };
+    this.historyManager.saveState(state);
   }
 
   handleWinPanelClick(x, y) {
@@ -255,31 +272,24 @@ export default class Game {
   shuffleBottles() {
     if (this.isAnimating) return;
     
-    this.historyManager.saveState(this.bottles);
+    this.saveCurrentState();
     
-    const incompleteBottles = this.bottles.filter(b => !b.isCompleted && !b.isEmpty);
+    const activeBottles = this.bottles.filter(b => !b.isEmpty);
     
-    if (incompleteBottles.length < 2) return;
+    if (activeBottles.length < 1) return;
     
-    let allLiquids = [];
-    incompleteBottles.forEach(bottle => {
-      allLiquids.push(...bottle.liquids);
-    });
-    
-    allLiquids = Utils.shuffleArray(allLiquids);
-    
-    let liquidIndex = 0;
-    incompleteBottles.forEach(bottle => {
-      const liquidCount = bottle.liquids.length;
-      bottle.liquids = [];
-      for (let i = 0; i < liquidCount && liquidIndex < allLiquids.length; i++) {
-        bottle.liquids.push(allLiquids[liquidIndex]);
-        liquidIndex++;
-      }
+    activeBottles.forEach(bottle => {
+      bottle.liquids = Utils.shuffleArray(bottle.liquids);
     });
     
     this.moves++;
-    this.selectedBottle = null;
+    
+    if (this.selectedBottle) {
+      this.selectedBottle.selected = false;
+      this.selectedBottle = null;
+    }
+    
+    this.audioManager.playSound('click');
   }
 
   undo() {
@@ -289,41 +299,37 @@ export default class Game {
     const previousState = this.historyManager.undo();
     if (!previousState) return;
     
-    previousState.forEach(state => {
-      const bottle = this.bottles.find(b => b.id === state.id);
-      if (bottle) {
-        bottle.liquids = [...state.liquids];
-        bottle.selected = false;
-        bottle.disappearing = false;
-        bottle.opacity = 1;
-        bottle.scale = 1;
-      }
+    this.bottles = previousState.bottles.map(state => {
+      const bottle = new Bottle(state.id, state.x, state.y, [...state.liquids]);
+      bottle.selected = state.selected;
+      bottle.disappearing = state.disappearing;
+      bottle.opacity = state.opacity;
+      bottle.scale = state.scale;
+      return bottle;
     });
     
-    if (this.selectedBottle) {
-      this.selectedBottle.selected = false;
-      this.selectedBottle = null;
-    }
+    this.moves = previousState.moves;
+    this.selectedBottle = null;
     
-    this.moves = Math.max(0, this.moves - 1);
+    this.audioManager.playSound('click');
   }
 
   addEmptyBottle() {
     if (this.isAnimating) return;
     
-    this.historyManager.saveState(this.bottles);
+    this.saveCurrentState();
     
     const bottlesPerRow = 4;
     const bottleWidth = config.bottleWidth;
     const bottleHeight = config.bottleHeight;
-    const spacingX = 20;
-    const spacingY = 30;
+    const spacingX = 15;
+    const spacingY = 25;
     
     const totalWidth = bottlesPerRow * bottleWidth + (bottlesPerRow - 1) * spacingX;
-    const startX = (this.canvas.width - totalWidth) / 2;
-    const startY = 100;
+    const startX = Math.max(20, (this.canvas.width - totalWidth) / 2);
+    const startY = 90;
     
-    const newId = Math.max(...this.bottles.map(b => b.id)) + 1;
+    const newId = this.bottles.length > 0 ? Math.max(...this.bottles.map(b => b.id)) + 1 : 0;
     const totalBottles = this.bottles.length;
     const row = Math.floor(totalBottles / bottlesPerRow);
     const col = totalBottles % bottlesPerRow;
@@ -335,22 +341,24 @@ export default class Game {
     this.bottles.push(newBottle);
     
     this.moves++;
+    this.audioManager.playSound('click');
   }
 
   checkCompletion() {
     const completedBottles = this.bottles.filter(b => b.isCompleted);
-    const hasIncomplete = this.bottles.some(b => !b.isCompleted && !b.isEmpty);
+    const nonEmptyBottles = this.bottles.filter(b => !b.isEmpty);
+    const incompleteBottles = nonEmptyBottles.filter(b => !b.isCompleted);
     
     if (completedBottles.length > 0) {
       this.audioManager.playSound('complete');
       this.animateDisappear(completedBottles);
     }
     
-    if (!hasIncomplete && this.bottles.every(b => b.isCompleted || b.isEmpty)) {
+    if (incompleteBottles.length === 0 && nonEmptyBottles.every(b => b.isCompleted)) {
       setTimeout(() => {
         this.showWinPanel = true;
         this.audioManager.playSound('complete');
-      }, 600);
+      }, 800);
     }
   }
 
@@ -410,7 +418,8 @@ export default class Game {
   update(deltaTime) {
     for (const bottle of this.bottles) {
       if (bottle.selected) {
-        bottle.y = bottle.y + Math.sin(Date.now() / 200) * 0.3;
+        const baseY = bottle.y;
+        bottle.y = baseY + Math.sin(Date.now() / 200) * 3;
       }
     }
   }
