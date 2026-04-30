@@ -8,6 +8,40 @@ export default class Renderer {
     this.height = canvas.height;
   }
 
+  drawRoundRect(x, y, width, height, radius) {
+    const ctx = this.ctx;
+    const r = Math.min(radius, width / 2, height / 2);
+    
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + width - r, y);
+    ctx.arcTo(x + width, y, x + width, y + r, r);
+    ctx.lineTo(x + width, y + height - r);
+    ctx.arcTo(x + width, y + height, x + width - r, y + height, r);
+    ctx.lineTo(x + r, y + height);
+    ctx.arcTo(x, y + height, x, y + height - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+  }
+
+  drawRoundRectWithDifferentRadii(x, y, width, height, radii) {
+    const ctx = this.ctx;
+    const [topLeft, topRight, bottomRight, bottomLeft] = radii;
+    
+    ctx.beginPath();
+    ctx.moveTo(x + topLeft, y);
+    ctx.lineTo(x + width - topRight, y);
+    ctx.arcTo(x + width, y, x + width, y + topRight, topRight);
+    ctx.lineTo(x + width, y + height - bottomRight);
+    ctx.arcTo(x + width, y + height, x + width - bottomRight, y + height, bottomRight);
+    ctx.lineTo(x + bottomLeft, y + height);
+    ctx.arcTo(x, y + height, x, y + height - bottomLeft, bottomLeft);
+    ctx.lineTo(x, y + topLeft);
+    ctx.arcTo(x, y, x + topLeft, y, topLeft);
+    ctx.closePath();
+  }
+
   clear() {
     this.ctx.clearRect(0, 0, this.width, this.height);
     this.ctx.fillStyle = '#1a1a2e';
@@ -46,17 +80,7 @@ export default class Renderer {
     const ctx = this.ctx;
     const cornerRadius = config.bottleCornerRadius;
     
-    ctx.beginPath();
-    ctx.moveTo(x + cornerRadius, y);
-    ctx.lineTo(x + width - cornerRadius, y);
-    ctx.quadraticCurveTo(x + width, y, x + width, y + cornerRadius);
-    ctx.lineTo(x + width, y + height - cornerRadius);
-    ctx.quadraticCurveTo(x + width, y + height, x + width - cornerRadius, y + height);
-    ctx.lineTo(x + cornerRadius, y + height);
-    ctx.quadraticCurveTo(x, y + height, x, y + height - cornerRadius);
-    ctx.lineTo(x, y + cornerRadius);
-    ctx.quadraticCurveTo(x, y, x + cornerRadius, y);
-    ctx.closePath();
+    this.drawRoundRect(x, y, width, height, cornerRadius);
     
     ctx.fillStyle = selected ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.08)';
     ctx.fill();
@@ -85,37 +109,37 @@ export default class Renderer {
     liquids.forEach((color, index) => {
       const liquidY = y + height - (index + 1) * liquidHeight - padding;
       
-      ctx.beginPath();
-      ctx.roundRect(
+      const isTop = index === liquids.length - 1;
+      const isBottom = index === 0;
+      
+      const radii = [
+        isTop ? cornerRadius : 0,
+        isTop ? cornerRadius : 0,
+        isBottom ? cornerRadius : 0,
+        isBottom ? cornerRadius : 0
+      ];
+      
+      this.drawRoundRectWithDifferentRadii(
         x + padding,
         liquidY,
         liquidWidth,
         liquidHeight,
-        [
-          index === liquids.length - 1 ? cornerRadius : 0,
-          index === liquids.length - 1 ? cornerRadius : 0,
-          index === 0 ? cornerRadius : 0,
-          index === 0 ? cornerRadius : 0
-        ]
+        radii
       );
       ctx.fillStyle = color;
       ctx.fill();
       
-      ctx.beginPath();
-      ctx.roundRect(
-        x + padding,
-        liquidY,
-        liquidWidth,
-        liquidHeight / 3,
-        [
-          index === liquids.length - 1 ? cornerRadius : 0,
-          index === liquids.length - 1 ? cornerRadius : 0,
-          0,
-          0
-        ]
-      );
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-      ctx.fill();
+      if (isTop) {
+        this.drawRoundRect(
+          x + padding,
+          liquidY,
+          liquidWidth,
+          liquidHeight / 3,
+          cornerRadius
+        );
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.fill();
+      }
     });
   }
 
@@ -124,8 +148,7 @@ export default class Renderer {
     
     const ctx = this.ctx;
     
-    ctx.beginPath();
-    ctx.roundRect(x, y, width, height, 8);
+    this.drawRoundRect(x, y, width, height, 8);
     
     if (disabled) {
       ctx.fillStyle = 'rgba(100, 100, 100, 0.5)';
@@ -171,8 +194,7 @@ export default class Renderer {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
     ctx.fillRect(0, 0, this.width, this.height);
     
-    ctx.beginPath();
-    ctx.roundRect(panelX, panelY, panelWidth, panelHeight, 12);
+    this.drawRoundRect(panelX, panelY, panelWidth, panelHeight, 12);
     ctx.fillStyle = '#1e3a5f';
     ctx.fill();
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
@@ -210,8 +232,7 @@ export default class Renderer {
     const toggleWidth = 60;
     const toggleHeight = 30;
     
-    ctx.beginPath();
-    ctx.roundRect(toggleX, y, toggleWidth, toggleHeight, 15);
+    this.drawRoundRect(toggleX, y, toggleWidth, toggleHeight, 15);
     ctx.fillStyle = isOn ? '#4CAF50' : '#666666';
     ctx.fill();
     
@@ -232,8 +253,7 @@ export default class Renderer {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
     ctx.fillRect(0, 0, this.width, this.height);
     
-    ctx.beginPath();
-    ctx.roundRect(panelX, panelY, panelWidth, panelHeight, 12);
+    this.drawRoundRect(panelX, panelY, panelWidth, panelHeight, 12);
     ctx.fillStyle = '#1e3a5f';
     ctx.fill();
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
