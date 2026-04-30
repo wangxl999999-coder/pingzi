@@ -4,14 +4,7 @@ export default class HistoryManager {
     this.maxHistory = maxHistory;
   }
 
-  saveState(bottles) {
-    const state = bottles.map(bottle => ({
-      id: bottle.id,
-      x: bottle.x,
-      y: bottle.y,
-      liquids: [...bottle.liquids]
-    }));
-    
+  saveState(state) {
     this.history.push(state);
     
     if (this.history.length > this.maxHistory) {

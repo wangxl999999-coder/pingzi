@@ -9,9 +9,13 @@ export default class Level {
   }
 
   init() {
-    const difficulty = Math.min(this.levelNumber, 10);
-    const colorCount = Math.min(3 + Math.floor(difficulty / 2), config.colors.length);
-    const bottleCount = colorCount + Math.min(Math.floor(difficulty / 3), 3);
+    const difficulty = Math.min(this.levelNumber, 20);
+    
+    const colorCount = Math.min(2 + Math.floor(difficulty / 2), config.colors.length);
+    
+    const emptyBottleCount = Math.min(1 + Math.floor(difficulty / 5), 3);
+    
+    const bottleCount = colorCount + emptyBottleCount;
     
     this.generateLevel(colorCount, bottleCount);
   }
@@ -36,7 +40,7 @@ export default class Level {
       const bottleLiquids = [];
       
       if (i < colorCount) {
-        for (let j = 0; j < config.bottleCapacity && liquidIndex < allLiquids.length; j++) {
+        for (let j = 0; j < liquidsPerColor && liquidIndex < allLiquids.length; j++) {
           bottleLiquids.push(allLiquids[liquidIndex]);
           liquidIndex++;
         }
@@ -48,46 +52,97 @@ export default class Level {
       });
     }
     
+    this.ensureNotSolved();
     this.ensureSolvability();
   }
 
-  ensureSolvability() {
-    let attempts = 0;
-    const maxAttempts = 100;
+  ensureNotSolved() {
+    let isSolved = true;
     
-    while (!this.isSolvable() && attempts < maxAttempts) {
-      this.bottles.forEach(bottle => {
-        if (bottle.liquids.length > 1) {
-          const i = Math.floor(Math.random() * bottle.liquids.length);
-          const j = Math.floor(Math.random() * bottle.liquids.length);
-          [bottle.liquids[i], bottle.liquids[j]] = [bottle.liquids[j], bottle.liquids[i]];
+    for (const bottle of this.bottles) {
+      if (bottle.liquids.length === 0) continue;
+      
+      const color = bottle.liquids[0];
+      if (!bottle.liquids.every(c => c === color) || bottle.liquids.length !== config.bottleCapacity) {
+        isSolved = false;
+        break;
+      }
+    }
+    
+    if (isSolved) {
+      this.randomizeLiquids();
+    }
+  }
+
+  randomizeLiquids() {
+    const nonEmptyBottles = this.bottles.filter(b => b.liquids.length > 0);
+    if (nonEmptyBottles.length < 2) return;
+    
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const bottle1 = nonEmptyBottles[Math.floor(Math.random() * nonEmptyBottles.length)];
+      const bottle2 = nonEmptyBottles[Math.floor(Math.random() * nonEmptyBottles.length)];
+      
+      if (bottle1 === bottle2 || bottle1.liquids.length === 0 || bottle2.liquids.length === 0) continue;
+      
+      const idx1 = Math.floor(Math.random() * bottle1.liquids.length);
+      const idx2 = Math.floor(Math.random() * bottle2.liquids.length);
+      
+      [bottle1.liquids[idx1], bottle2.liquids[idx2]] = [bottle2.liquids[idx2], bottle1.liquids[idx1]];
+      
+      let stillSolved = true;
+      for (const bottle of this.bottles) {
+        if (bottle.liquids.length === 0) continue;
+        const color = bottle.liquids[0];
+        if (!bottle.liquids.every(c => c === color) || bottle.liquids.length !== config.bottleCapacity) {
+          stillSolved = false;
+          break;
         }
+      }
+      
+      if (!stillSolved) break;
+    }
+  }
+
+  ensureSolvability() {
+    if (this.isSolvable()) return;
+    
+    const nonEmptyBottles = this.bottles.filter(b => b.liquids.length > 0);
+    const colors = [...new Set(nonEmptyBottles.flatMap(b => b.liquids))];
+    
+    for (const color of colors) {
+      const bottlesWithColor = nonEmptyBottles.filter(b => b.liquids.includes(color));
+      
+      let hasColorOnTop = bottlesWithColor.some(b => {
+        const topIndex = b.liquids.length - 1;
+        return b.liquids[topIndex] === color;
       });
-      attempts++;
+      
+      if (!hasColorOnTop && bottlesWithColor.length > 0) {
+        const bottle = bottlesWithColor[0];
+        const colorIndex = bottle.liquids.indexOf(color);
+        const topIndex = bottle.liquids.length - 1;
+        
+        [bottle.liquids[colorIndex], bottle.liquids[topIndex]] = [bottle.liquids[topIndex], bottle.liquids[colorIndex]];
+      }
     }
   }
 
   isSolvable() {
-    const colorGroups = {};
+    const nonEmptyBottles = this.bottles.filter(b => b.liquids.length > 0);
+    const colors = [...new Set(nonEmptyBottles.flatMap(b => b.liquids))];
     
-    this.bottles.forEach(bottle => {
-      bottle.liquids.forEach((color, index) => {
-        if (!colorGroups[color]) {
-          colorGroups[color] = [];
-        }
-        colorGroups[color].push({
-          bottleId: bottle.id,
-          position: index,
-          onTop: index === bottle.liquids.length - 1
-        });
-      });
-    });
-    
-    for (const color in colorGroups) {
-      const positions = colorGroups[color];
-      const onTopCount = positions.filter(p => p.onTop).length;
+    for (const color of colors) {
+      let hasAccessible = false;
       
-      if (onTopCount === 0 && positions.length > 0) {
+      for (const bottle of nonEmptyBottles) {
+        const topIndex = bottle.liquids.length - 1;
+        if (bottle.liquids[topIndex] === color) {
+          hasAccessible = true;
+          break;
+        }
+      }
+      
+      if (!hasAccessible) {
         return false;
       }
     }
@@ -100,6 +155,6 @@ export default class Level {
   }
 
   static getMaxLevel() {
-    return 50;
+    return 100;
   }
 }
